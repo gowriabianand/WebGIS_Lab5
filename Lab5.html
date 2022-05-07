@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="A dashboard showing flood calls on the neighborhood level with its corresponding flood prevention infrastructure.">
+        <title>NYC Flood Map</title>
+        <link rel="shortcut icon" type="image/x-icon" href="docs/images/favicon.ico" />
+
+        <!-- STYLESHEETS -->
+        <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+        integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+        crossorigin="" />
+        <link href='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css'
+        rel='stylesheet' />
+        <link href='https://labs.easyblog.it/maps/leaflet-search/src/leaflet-search.css' rel='stylesheet' />
+
+        <!-- SCRIPTS --->
+        <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+        integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+        crossorigin=""></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/1.2.2/fuse.min.js"></script>
+        <script src='https://unpkg.com/@turf/turf/turf.min.js'></script>
+        <script src="./leaflet-providers.js"></script>
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <script src='https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js'></script>
+        <script src='https://labs.easyblog.it/maps/leaflet-search/src/leaflet-search.js'></script>
+        <script src="https://d3js.org/d3.v5.min.js"></script>
+        <script src="leaflet.geometryutil.js"></script>
+
+        <!-- <link rel="stylesheet" href="screen.css" />
+	
+        <link rel="stylesheet" href="../dist/MarkerCluster.css" />
+        <script src="../dist/leaflet.markercluster-src.js"></script>   -->
+
+        <style>
+            /* star applies style to every element */
+        /*
+        * {
+            height: 100%;
+            width: 100%;
+            padding: 0;
+            margin: 0;
+            border: 0;
+        }
+        */
+
+        body {
+            height: 100%;
+            width: 100%;
+            padding: 0;
+            margin: 0;
+            border: 0;
+            background-attachment: fixed;
+            background-size: 100% auto;
+        }
+
+        .blended_grid {
+            display: block;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            margin: 0px auto 0 auto;
+        }
+
+        .pageContent {
+            background-color: gray;
+            float: left;
+            clear: none;
+            height: 800px;
+            width: 100%;
+        }
+
+        /* .pageRightMenu {
+            background-color: mediumpurple;
+            float: right;
+            clear: none;
+            overflow: auto;
+            height: 800px;
+            width: 30%;
+        } */
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        </style>
+
+    </head>
+
+    <body>
+        <div class="blended_grid">
+            <div class="w3-container w3-sand w3-text-purple w3-center">
+                <h1>Flood calls per NTA and corresponding flood prevention infrastructure</h2></div>
+            <div class="pageContent">
+                <div id = "map"></div>
+            </div>
+            <!-- <div class="w3-container w3-purple w3-right" style="width:30%">Right</div> -->
+            <!-- <div class="w3-hover-green w3-hover-shadow w3-round w3-left" style="width:30%">
+                <p>Hover over me!</p>
+              </div> -->
+            <div class="w3-container w3-sand w3-text-purple">
+                <p class = "w3-small"> &copy; Gowri Anand 2022</p></div>
+        </div>
+
+        <script>
+            var map = L.map('map', {
+                fullscreenControl: true,
+            }).setView([40.75, -74], 10);
+
+            var baseLayer0 = L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw', {
+            maxZoom: 20,
+            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+                '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+                'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+            id: 'mapbox/light-v9',
+            tileSize: 512,
+            zoomOffset: -1
+        }).addTo(map);
+
+            let baseLayer1 = L.tileLayer.provider("CartoDB.DarkMatter");
+            let baseLayer2 = L.tileLayer.provider("OpenStreetMap");
+            let baseLayer3 = L.tileLayer.provider("Esri.WorldImagery");
+
+            var treeIcon = L.Icon.extend({
+            options: {
+            iconUrl: "tree.png",
+            iconAnchor: [16, 16], // point of the icon which will correspond to marker's location
+            popupAnchor: [3, 3], // point from which the popup should open relative to the iconAnchor
+            },
+        });
+
+            var smalltreeIcon = new treeIcon({
+            iconSize: [16, 16], // size of the icon
+        });
+
+            function onEachFeature(feature, layer) {
+                var popupContent = "<h4> Borough: " + feature.properties.boroname +
+                    "</h4><h5> NTA Name: " + feature.properties.ntaname +
+                    "</h5> Total 311 flood calls: " + feature.properties.total + "</p>";
+                if (feature.properties && feature.properties.popupContent) {
+                    popupContent += feature.properties.popupContent;
+                }
+
+                layer.bindPopup(popupContent);
+
+                layer.on({
+                    mouseclick: (e) => layer.openPopup(),
+                    mouseout: (e) => layer.closePopup()
+                });
+            }
+
+        // create empty layer, avoids data synchronization issues, can add data to empty layer later
+            var nycLayer = L.geoJSON(null, {
+                onEachFeature: onEachFeature
+                }).addTo(map);
+
+                var fuse;
+
+                fetch("./ntaflood.json").then((response) => 
+                { 
+                    return response.json();
+                })
+                .then((data) => {
+                    console.log(data);
+                    console.log(data.features.length);
+
+                    var maxval = -Infinity;
+                    var minval = Infinity;
+
+                    data.features.forEach((f, i) => {
+                          if (f.properties.ntaname != 'St. Albans' && f.properties.ntaname != 'Hoffman & Swinburne Islands') {
+                              maxval = Math.max(maxval, f.properties.total);
+                              minval = Math.min(minval, f.properties.total);
+                          }
+                      });
+
+                    var valrange = maxval - minval;
+
+                    nycLayer.options.style = (f) => {
+                        return {
+                            fillColor: d3.interpolateOranges((f.properties.total - minval)/valrange),
+                            color: "#fff",
+                            weight: 1,
+                            fillOpacity: 0.8
+                        }
+                    };
+
+                    nycLayer.addData(data);
+
+                    fuse = new Fuse(data.features, {
+                    keys: [
+                    'properties.boroname',
+                    'properties.ntaname',
+                    'properties.total'
+                    //'properties.operator'
+                ]
+                    
+                }) 
+                    });
+
+            // map.on('click', function (e) {
+            //     var layersToSearch = [];
+            //     map.eachLayer(layer => {
+            //         if (layer instanceof L.Marker) {
+            //             layersToSearch.push(layer);}
+            //     })
+            //     nearestLayer = L.GeometryUtil.closestLayer(map, layersToSearch, e.latlng); 
+            //     nearestLayer.layer.bindPopup('Nearest Point').openPopup();
+
+
+            //     });
+
+            var gi = L.geoJSON(null, {
+                style: function (feature) {
+                return feature.properties && feature.properties.style;
+            },
+                // onEachFeature: onEachFeaturegi,
+                pointToLayer: function (feature, latlng) {
+                    return L.marker(latlng, { icon: smalltreeIcon })}});
+            
+            $.getJSON("./gi/greenroof.geojson", function (data) {
+                // Do NOT create the GeoJSON layer here.
+                // Create it outside and then fill the data
+                gi.addData(data);
+            });
+
+        //     var data = fetchJSON('./gi/greenroof.geojson')
+        //     .then(function(data) { 
+        //         // do what you want to do with `data` here...
+        //         data.features.forEach(function(feature) {
+        //                 console.log(feature);
+        //             });
+
+        // });
+
+            var points = turf.featureCollection(gi.features);
+
+            gi.on('click', function(e) {
+                var coord = e.latlng;
+                var lat = coord.lat;
+                var lng = coord.lng;
+                var targetPoint = turf.point([lng, lat]);
+                var nearest = turf.nearestPoint(targetPoint, points);
+                    alert(JSON.stringify(nearest));
+            });
+
+            var baseMaps = {
+            Mapbox: baseLayer0,
+            "CartoDB.DarkMatter": baseLayer1,
+            OpenStreetMap: baseLayer2,
+            "Esri.WorldImagery": baseLayer3,
+            };
+
+            var overlayMaps = {
+            "NTAs": nycLayer,
+            "Green Infrastructure": gi, 
+            }
+
+            var lC = L.control.layers(baseMaps, overlayMaps).addTo(map).expand();        
+
+            var searchControl = new L.Control.Search({
+            layer: nycLayer,
+            propertyName: 'ntaname',
+            marker: false,
+            moveToLocation: function (latlng, title, map) {
+                //map.fitBounds( latlng.layer.getBounds() );
+                var zoom = map.getBoundsZoom(latlng.layer.getBounds());
+                map.setView(latlng, zoom); // access the zoom
+            },
+            filterData: function (text, records) {
+                var jsons = fuse.search(text),
+                    ret = {}, key;
+
+                for (var i in jsons) {
+                    key = jsons[i].properties.ntaname;
+                    ret[key] = records[key];
+                }
+
+                console.log(jsons, ret);
+                return ret;
+            }
+        });
+
+        searchControl.on('search:locationfound', function (e) {
+
+            e.layer.setStyle({ fillColor: '#3f0', color: '#0f0' });
+            if (e.layer._popup)
+                e.layer.openPopup();
+
+        }).on('search:collapsed', function (e) {
+
+            nycLayer.eachLayer(function (layer) {	//restore feature color
+                nycLayer.resetStyle(layer);
+            });
+        });
+
+        map.addControl(searchControl);  //inizialize search control
+        
+        /*
+        https://github.com/stefanocudini/leaflet-search
+
+        Configure the OpenStreetMap nominatim
+        https://nominatim.org/release-docs/develop/api/Overview/
+        https://nominatim.org/release-docs/develop/api/Search/
+        */
+        // var osmGeocoderControl = new L.Control.Search({
+        //     url: 'https://nominatim.openstreetmap.org/search?format=json&q={s}&countrycodes=us',
+        //     jsonpParam: 'json_callback',
+        //     propertyName: 'display_name',
+        //     propertyLoc: ['lat', 'lon'],
+        //     marker: L.circleMarker([0, 0], { radius: 30 }),
+        //     autoCollapse: true,
+        //     autoType: false,
+        //     minLength: 2,
+        //     position: 'topright',
+        //     container: '',
+        //     moveToLocation: (latlng, name, map) => {
+		// 		USstatesLayerB.getLayers().forEach( (l) => {
+        //             if (turf.booleanPointInPolygon(turf.point([latlng.lng, latlng.lat]), l.feature)) {
+        //                 l.setStyle({ fillColor: "#555" });
+        //                 map.fitBounds(l.getBounds());
+		// 				return; // to break out the for Each loop. "break;" does not work here.
+        //             }
+        //         });
+        //     }
+        // });
+
+        // map.addControl(osmGeocoderControl);
+
+        </script>
+    </body>
+
+</html>
