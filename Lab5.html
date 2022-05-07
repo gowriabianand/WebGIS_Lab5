@@ -221,7 +221,7 @@
                 pointToLayer: function (feature, latlng) {
                     return L.marker(latlng, { icon: smalltreeIcon })}});
             
-            $.getJSON("./gi/greenroof.geojson", function (data) {
+            $.getJSON("./greenroof.geojson", function (data) {
                 // Do NOT create the GeoJSON layer here.
                 // Create it outside and then fill the data
                 gi.addData(data);
